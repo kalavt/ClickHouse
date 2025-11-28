@@ -1,6 +1,7 @@
 #include <Storages/Kafka/KafkaConfigLoader.h>
 
 #include <Access/KerberosInit.h>
+#include <Storages/Kafka/AWSMSKIAMAuth.h>
 #include <Storages/Kafka/KafkaSettings.h>
 #include <Storages/Kafka/StorageKafka.h>
 #include <Storages/Kafka/StorageKafka2.h>
@@ -32,6 +33,8 @@ namespace KafkaSetting
     extern const KafkaSettingsString kafka_sasl_mechanism;
     extern const KafkaSettingsString kafka_sasl_username;
     extern const KafkaSettingsString kafka_sasl_password;
+    extern const KafkaSettingsBool kafka_aws_msk_iam_auth;
+    extern const KafkaSettingsString kafka_aws_region;
     extern const KafkaSettingsString kafka_compression_codec;
     extern const KafkaSettingsInt64 kafka_compression_level;
 }
@@ -374,6 +377,29 @@ void updateConfigurationFromConfig(
 
     if (kafka_settings[KafkaSetting::kafka_compression_level].changed)
         kafka_config.set("compression.level", kafka_settings[KafkaSetting::kafka_compression_level].toString());
+
+    // Configure AWS MSK IAM authentication if enabled
+    if (kafka_settings[KafkaSetting::kafka_aws_msk_iam_auth].value)
+    {
+        const String & aws_region = kafka_settings[KafkaSetting::kafka_aws_region].value;
+        
+        LOG_INFO(params.log, "Configuring AWS MSK IAM authentication");
+        
+        try
+        {
+            // Pass broker list to allow auto-detection of region from broker addresses
+            String broker_list = kafka_config.has_property("metadata.broker.list") 
+                ? kafka_config.get("metadata.broker.list") 
+                : "";
+            
+            AWSMSKIAMAuth::configureOAuthCallbacks(kafka_config, aws_region, broker_list, params.log);
+        }
+        catch (const Exception & e)
+        {
+            LOG_ERROR(params.log, "Failed to configure AWS MSK IAM authentication: {}", e.what());
+            throw;
+        }
+    }
 
 #if USE_KRB5
     if (kafka_config.has_property("sasl.kerberos.kinit.cmd"))
