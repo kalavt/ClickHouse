@@ -1,8 +1,8 @@
 #pragma once
 
 #include <base/types.h>
+#include <Common/Logger.h>
 #include <memory>
-#include <string>
 
 namespace cppkafka
 {
@@ -12,43 +12,35 @@ class Configuration;
 namespace DB
 {
 
-class LoggerPtr;
-
 /// AWS MSK IAM SASL/OAUTHBEARER authentication handler
-/// This class generates OAuth tokens for AWS MSK using IAM credentials
+/// 
+/// Implements AWS MSK IAM authentication by intercepting rdkafka.sasl.mechanism=aws_msk_iam
+/// configuration and converting it to OAUTHBEARER with AWS IAM token generation.
+/// 
+/// Implementation:
+/// - Uses AWS SDK AWSAuthV4Signer for SigV4 presigned URLs
+/// - Token format: Base64-URL encoded presigned URL per AWS MSK IAM spec
+/// - Token lifetime: 5 minutes with auto-refresh at 80% (librdkafka handles refresh)
+/// - Memory safe: shared_ptr for context shared across multiple rd_kafka_t instances
 class AWSMSKIAMAuth
 {
 public:
-    /// Initialize AWS MSK IAM authentication
-    /// @param region AWS region where MSK cluster is located
-    /// @param log Logger instance for logging
-    AWSMSKIAMAuth(const String & region, LoggerPtr log);
-
-    /// Generate OAuth token for AWS MSK
-    /// Returns the signed OAuth token string
-    String generateToken();
-
     /// Configure Kafka client with AWS MSK IAM OAuth callbacks
+    /// Called when rdkafka.sasl.mechanism=aws_msk_iam is detected
     /// @param config Kafka configuration object to update
     /// @param region AWS region for the MSK cluster
     /// @param broker_list Comma-separated list of broker addresses
     /// @param log Logger instance
-    static void configureOAuthCallbacks(cppkafka::Configuration & config, const String & region, const String & broker_list, LoggerPtr log);
+    static void configureOAuthCallbacks(
+        cppkafka::Configuration & config,
+        const String & region,
+        const String & broker_list,
+        LoggerPtr log);
     
     /// Extract AWS region from MSK broker address
-    /// @param broker_address A broker address like "b-1.cluster.kafka.us-east-1.amazonaws.com:9098"
-    /// @return The extracted region (e.g., "us-east-1") or empty string if not found
+    /// @param broker_address Broker address like "b-1.cluster.kafka.us-east-1.amazonaws.com:9098"
+    /// @return Extracted region (e.g., "us-east-1") or empty string if not found
     static String extractRegionFromBroker(const String & broker_address);
-
-private:
-    String aws_region;
-    LoggerPtr log;
-    
-    /// Generate the OAuth token payload for AWS MSK
-    String generateTokenPayload();
-    
-    /// Sign the token payload using AWS SigV4
-    String signToken(const String & payload);
 };
 
 }

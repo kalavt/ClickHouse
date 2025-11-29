@@ -33,8 +33,6 @@ namespace KafkaSetting
     extern const KafkaSettingsString kafka_sasl_mechanism;
     extern const KafkaSettingsString kafka_sasl_username;
     extern const KafkaSettingsString kafka_sasl_password;
-    extern const KafkaSettingsBool kafka_aws_msk_iam_auth;
-    extern const KafkaSettingsString kafka_aws_region;
     extern const KafkaSettingsString kafka_compression_codec;
     extern const KafkaSettingsInt64 kafka_compression_level;
 }
@@ -367,7 +365,33 @@ void updateConfigurationFromConfig(
     if (!kafka_settings[KafkaSetting::kafka_security_protocol].value.empty())
         kafka_config.set("security.protocol", kafka_settings[KafkaSetting::kafka_security_protocol]);
     if (!kafka_settings[KafkaSetting::kafka_sasl_mechanism].value.empty())
-        kafka_config.set("sasl.mechanism", kafka_settings[KafkaSetting::kafka_sasl_mechanism]);
+    {
+        String sasl_mechanism = kafka_settings[KafkaSetting::kafka_sasl_mechanism].value;
+        
+        // Check if this is AWS MSK IAM authentication
+        if (sasl_mechanism == "aws_msk_iam")
+        {
+            // User specified rdkafka.sasl.mechanism=aws_msk_iam
+            // Convert to OAUTHBEARER and configure AWS MSK IAM token generation
+            LOG_INFO(params.log, "Detected rdkafka.sasl.mechanism=aws_msk_iam, configuring AWS MSK IAM OAuth");
+            
+            String broker_list = kafka_config.has_property("metadata.broker.list") 
+                ? kafka_config.get("metadata.broker.list") 
+                : "";
+            
+            // configureOAuthCallbacks will:
+            // 1. Auto-detect region from broker addresses
+            // 2. Set sasl.mechanism=OAUTHBEARER
+            // 3. Set security.protocol=SASL_SSL
+            // 4. Register OAuth callbacks for token generation
+            AWSMSKIAMAuth::configureOAuthCallbacks(kafka_config, "" /* auto-detect region */, broker_list, params.log);
+        }
+        else
+        {
+            // Standard SASL mechanisms
+            kafka_config.set("sasl.mechanism", sasl_mechanism);
+        }
+    }
     if (!kafka_settings[KafkaSetting::kafka_sasl_username].value.empty())
         kafka_config.set("sasl.username", kafka_settings[KafkaSetting::kafka_sasl_username]);
     if (!kafka_settings[KafkaSetting::kafka_sasl_password].value.empty())
@@ -377,29 +401,6 @@ void updateConfigurationFromConfig(
 
     if (kafka_settings[KafkaSetting::kafka_compression_level].changed)
         kafka_config.set("compression.level", kafka_settings[KafkaSetting::kafka_compression_level].toString());
-
-    // Configure AWS MSK IAM authentication if enabled
-    if (kafka_settings[KafkaSetting::kafka_aws_msk_iam_auth].value)
-    {
-        const String & aws_region = kafka_settings[KafkaSetting::kafka_aws_region].value;
-        
-        LOG_INFO(params.log, "Configuring AWS MSK IAM authentication");
-        
-        try
-        {
-            // Pass broker list to allow auto-detection of region from broker addresses
-            String broker_list = kafka_config.has_property("metadata.broker.list") 
-                ? kafka_config.get("metadata.broker.list") 
-                : "";
-            
-            AWSMSKIAMAuth::configureOAuthCallbacks(kafka_config, aws_region, broker_list, params.log);
-        }
-        catch (const Exception & e)
-        {
-            LOG_ERROR(params.log, "Failed to configure AWS MSK IAM authentication: {}", e.what());
-            throw;
-        }
-    }
 
 #if USE_KRB5
     if (kafka_config.has_property("sasl.kerberos.kinit.cmd"))
