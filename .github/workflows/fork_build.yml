@@ -1,0 +1,54 @@
+# Simplified workflow for fork repositories
+# Builds ClickHouse Docker image using root Dockerfile
+
+name: Fork Build
+
+on:
+  workflow_dispatch: {}
+
+env:
+  PYTHONUNBUFFERED: 1
+
+jobs:
+  build_docker_image:
+    name: "Build ClickHouse Docker Image"
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker Image
+        run: |
+          # 使用根目录的 Dockerfile 进行多阶段构建
+          docker build \
+            --tag clickhouse-server:${{ github.sha }} \
+            --tag clickhouse-server:latest \
+            --file Dockerfile \
+            .
+      
+      - name: Test Docker Image
+        run: |
+          docker run --rm clickhouse-server:latest clickhouse-client --version
+          docker run --rm clickhouse-server:latest clickhouse-server --version
+      
+      - name: Save Docker Image
+        run: |
+          docker save clickhouse-server:latest | gzip > clickhouse-server-image.tar.gz
+      
+      - name: Upload Docker Image
+        uses: actions/upload-artifact@v3
+        with:
+          name: clickhouse-server-image
+          path: clickhouse-server-image.tar.gz
+          retention-days: 7
+      
+      - name: Show image info
+        run: |
+          docker images clickhouse-server:latest
+          docker history clickhouse-server:latest
