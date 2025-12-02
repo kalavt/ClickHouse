@@ -13,10 +13,10 @@ namespace DB
 {
 
 /// AWS MSK IAM SASL/OAUTHBEARER authentication handler
-/// 
+///
 /// Implements AWS MSK IAM authentication by intercepting rdkafka.sasl.mechanism=AWS_MSK_IAM
 /// configuration and converting it to OAUTHBEARER with AWS IAM token generation.
-/// 
+///
 /// Implementation:
 /// - Uses AWS SDK AWSAuthV4Signer for SigV4 presigned URLs
 /// - Token format: Base64-URL encoded presigned URL per AWS MSK IAM spec
@@ -36,7 +36,7 @@ public:
         const String & region,
         const String & broker_list,
         LoggerPtr log);
-    
+
     /// Extract AWS region from MSK broker address
     /// @param broker_address Broker address like "b-1.cluster.kafka.us-east-1.amazonaws.com:9098"
     /// @return Extracted region (e.g., "us-east-1") or empty string if not found

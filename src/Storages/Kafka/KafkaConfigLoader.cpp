@@ -368,18 +368,18 @@ void updateConfigurationFromConfig(
     if (!kafka_settings[KafkaSetting::kafka_sasl_mechanism].value.empty())
     {
         String sasl_mechanism = kafka_settings[KafkaSetting::kafka_sasl_mechanism].value;
-        
+
         // Check if this is AWS MSK IAM authentication (case-insensitive to match librdkafka behavior)
         if (boost::iequals(sasl_mechanism, "AWS_MSK_IAM"))
         {
             // User specified rdkafka.sasl.mechanism=AWS_MSK_IAM
             // Convert to OAUTHBEARER and configure AWS MSK IAM token generation
             LOG_INFO(params.log, "Detected rdkafka.sasl.mechanism=AWS_MSK_IAM, configuring AWS MSK IAM OAuth");
-            
-            String broker_list = kafka_config.has_property("metadata.broker.list") 
-                ? kafka_config.get("metadata.broker.list") 
+
+            String broker_list = kafka_config.has_property("metadata.broker.list")
+                ? kafka_config.get("metadata.broker.list")
                 : "";
-            
+
             // configureOAuthCallbacks will:
             // 1. Auto-detect region from broker addresses
             // 2. Set sasl.mechanism=OAUTHBEARER

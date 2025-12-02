@@ -39,7 +39,7 @@ namespace
     constexpr int64_t MSK_IAM_TOKEN_LIFETIME_SECONDS = 300;
 
     /// OAuth callback context - MEMORY SAFE with shared_ptr
-    /// 
+    ///
     /// CRITICAL: librdkafka copies rd_kafka_conf_t (cppkafka always copies).
     /// Opaque pointer is copied, so multiple rd_kafka_t share same pointer.
     /// Solution: Store shared_ptr, reference counting handles cleanup.
@@ -66,13 +66,13 @@ namespace
             uri.SetAuthority(broker_host.c_str());
             uri.SetPath("/");
             uri.AddQueryStringParameter("Action", "kafka-cluster:Connect");
-            
+
             // Create HTTP GET request
             auto request = Aws::Http::CreateHttpRequest(
                 uri,
                 Aws::Http::HttpMethod::HTTP_GET,
                 Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
-            
+
             // Create signer for kafka-cluster service
             Aws::Client::AWSAuthV4Signer signer(
                 std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(credentials),
@@ -80,7 +80,7 @@ namespace
                 region.c_str(),
                 Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
                 false);
-            
+
             // Generate presigned URL (SDK handles SigV4)
             // Note: AWS MSK standard uses 900s (15min) expiry for presigned URL
             // This provides buffer time even though OAuth token lifetime is 300s (5min)
@@ -88,16 +88,16 @@ namespace
             {
                 throw Exception(ErrorCodes::AWS_ERROR, "Failed to presign AWS MSK IAM request");
             }
-            
+
             String presigned_url = request->GetURIString();
-            
+
             // Validate presigned URL format
             if (presigned_url.empty() || presigned_url.find("Action=kafka-cluster%3AConnect") == String::npos)
             {
-                throw Exception(ErrorCodes::AWS_ERROR, 
+                throw Exception(ErrorCodes::AWS_ERROR,
                     "Invalid presigned URL generated: missing required Action parameter");
             }
-            
+
             // AWS MSK requires Base64-URL encoding (RFC 4648 Section 5)
             // url_encoding=true converts + to -, / to _, and removes padding
             return base64Encode(presigned_url, /* url_encoding */ true, /* no_padding */ true);
@@ -123,7 +123,7 @@ namespace
         void * opaque)
     {
         auto * context_ptr = static_cast<std::shared_ptr<OAuthBearerTokenRefreshContext>*>(opaque);
-        
+
         if (!context_ptr || !(*context_ptr))
         {
             auto fallback_log = getLogger("AWSMSKIAMAuth");
@@ -131,9 +131,9 @@ namespace
             rd_kafka_oauthbearer_set_token_failure(rk, "invalid context");
             return;
         }
-        
+
         auto & context = **context_ptr;
-        
+
         try
         {
             // Build MSK service endpoint for token generation
@@ -143,10 +143,10 @@ namespace
             String broker_host = context.is_serverless
                 ? ("kafka-serverless." + context.region + ".amazonaws.com")
                 : ("kafka." + context.region + ".amazonaws.com");
-            
+
             LOG_DEBUG(context.log, "AWS MSK IAM token refresh for {} ({})",
                      broker_host, context.is_serverless ? "Serverless" : "Standard");
-            
+
             // Get credentials
             auto credentials = context.credentials_provider->GetAWSCredentials();
             if (credentials.IsEmpty())
@@ -155,16 +155,16 @@ namespace
                 rd_kafka_oauthbearer_set_token_failure(rk, "No AWS credentials available");
                 return;
             }
-            
+
             // Generate token
             String token = generateAWSMSKToken(context.region, broker_host, credentials);
-            
+
             // Token expiry
             auto now = std::chrono::system_clock::now();
             auto expiry_time = now + std::chrono::seconds(MSK_IAM_TOKEN_LIFETIME_SECONDS);
             auto expiry_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                 expiry_time.time_since_epoch()).count();
-            
+
             // Set token in librdkafka
             rd_kafka_error_t * error = rd_kafka_oauthbearer_set_token(
                 rk,
@@ -173,7 +173,7 @@ namespace
                 credentials.GetAWSAccessKeyId().c_str(),
                 nullptr, 0,
                 nullptr);
-            
+
             if (error)
             {
                 String error_msg = rd_kafka_error_string(error);
@@ -200,36 +200,36 @@ String AWSMSKIAMAuth::extractRegionFromBroker(const String & broker_address)
     // Standard: b-1.cluster.kafka.us-east-1.amazonaws.com:9098
     // Serverless: boot-X.kafka-serverless.us-east-1.amazonaws.com:9098
     // VPC Endpoint: vpce-xxx.kafka.us-east-1.vpce.amazonaws.com:9098
-    
+
     if (broker_address.empty())
         return "";
-    
+
     // Remove port if present (e.g., :9098)
     String broker_host = broker_address;
     size_t colon_pos = broker_host.find(':');
     if (colon_pos != String::npos)
         broker_host = broker_host.substr(0, colon_pos);
-    
+
     // Look for .amazonaws.com
     size_t aws_pos = broker_host.find(".amazonaws.com");
     if (aws_pos == String::npos)
         return "";
-    
+
     // Extract region: find the component before .amazonaws.com
     // For VPC endpoints (vpce-xxx.kafka.region.vpce.amazonaws.com), skip .vpce
     size_t region_end = aws_pos;
     if (aws_pos >= 5 && broker_host.substr(aws_pos - 5, 5) == ".vpce")
         region_end = aws_pos - 5;
-    
+
     size_t region_start = broker_host.rfind('.', region_end - 1);
     if (region_start == String::npos)
         return ""; // No dot found before region
-    
+
     region_start++; // Skip the dot
-    
+
     if (region_start >= region_end)
         return "";
-    
+
     return broker_host.substr(region_start, region_end - region_start);
 }
 
@@ -240,15 +240,15 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
     LoggerPtr log)
 {
     String effective_region = region;
-    
+
     // Auto-detect region from broker
     if (effective_region.empty() && !broker_list.empty())
     {
         size_t comma_pos = broker_list.find(',');
-        String first_broker = (comma_pos != String::npos) 
-            ? broker_list.substr(0, comma_pos) 
+        String first_broker = (comma_pos != String::npos)
+            ? broker_list.substr(0, comma_pos)
             : broker_list;
-        
+
         // Trim whitespace
         size_t start = first_broker.find_first_not_of(" \t\r\n");
         size_t end = first_broker.find_last_not_of(" \t\r\n");
@@ -256,14 +256,14 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
         {
             first_broker = first_broker.substr(start, end - start + 1);
             effective_region = extractRegionFromBroker(first_broker);
-            
+
             if (!effective_region.empty())
             {
                 LOG_INFO(log, "Auto-detected region '{}' from broker: {}", effective_region, first_broker);
             }
         }
     }
-    
+
     if (effective_region.empty())
     {
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
@@ -275,7 +275,7 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
             "Example: b-1.mycluster.kafka.us-east-1.amazonaws.com:9098",
             broker_list);
     }
-    
+
     // Detect cluster type by checking for serverless keyword in broker address
     bool is_serverless = false;
     if (!broker_list.empty() && broker_list.find(".kafka-serverless.") != String::npos)
@@ -283,28 +283,28 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
         is_serverless = true;
         LOG_INFO(log, "Detected MSK Serverless cluster");
     }
-    
+
     // Set OAUTHBEARER (converted from user's rdkafka.sasl.mechanism=AWS_MSK_IAM)
     config.set("sasl.mechanism", "OAUTHBEARER");
     config.set("security.protocol", "SASL_SSL");
-    
+
     // Create context
     auto credentials_provider = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
     auto context = std::make_shared<OAuthBearerTokenRefreshContext>(
         OAuthBearerTokenRefreshContext{effective_region, is_serverless, log, credentials_provider});
-    
+
     // Configure librdkafka
     rd_kafka_conf_t * rd_config = config.get_handle();
-    
+
     rd_kafka_conf_enable_sasl_queue(rd_config, 1);  // Background refresh
     rd_kafka_conf_set_oauthbearer_token_refresh_cb(rd_config, oauthBearerTokenRefreshCallback);
     rd_kafka_conf_set_opaque_destructor(rd_config, oauthBearerContextDestructor);
-    
+
     // Store shared_ptr (each conf copy increments refcount)
     // Note: rd_kafka_conf_set_opaque takes ownership, destructor will be called on cleanup
     auto * context_ptr = new std::shared_ptr<OAuthBearerTokenRefreshContext>(context);
     rd_kafka_conf_set_opaque(rd_config, context_ptr);
-    
+
     LOG_INFO(log, "Configured AWS MSK {} cluster IAM OAuth, region {}",
              is_serverless ? "Serverless" : "Standard", effective_region);
 }
