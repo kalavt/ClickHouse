@@ -14,7 +14,7 @@ namespace DB
 
 /// AWS MSK IAM SASL/OAUTHBEARER authentication handler
 /// 
-/// Implements AWS MSK IAM authentication by intercepting rdkafka.sasl.mechanism=aws_msk_iam
+/// Implements AWS MSK IAM authentication by intercepting rdkafka.sasl.mechanism=AWS_MSK_IAM
 /// configuration and converting it to OAUTHBEARER with AWS IAM token generation.
 /// 
 /// Implementation:
@@ -26,7 +26,7 @@ class AWSMSKIAMAuth
 {
 public:
     /// Configure Kafka client with AWS MSK IAM OAuth callbacks
-    /// Called when rdkafka.sasl.mechanism=aws_msk_iam is detected
+    /// Called when rdkafka.sasl.mechanism=AWS_MSK_IAM is detected
     /// @param config Kafka configuration object to update
     /// @param region AWS region for the MSK cluster
     /// @param broker_list Comma-separated list of broker addresses
