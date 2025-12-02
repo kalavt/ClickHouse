@@ -7,6 +7,7 @@
 #include <Storages/Kafka/StorageKafka2.h>
 #include <Storages/Kafka/parseSyslogLevel.h>
 #include <boost/algorithm/string/replace.hpp>
+#include <boost/algorithm/string/predicate.hpp>
 #include <Common/Exception.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/NamedCollections/NamedCollectionsFactory.h>
@@ -368,8 +369,8 @@ void updateConfigurationFromConfig(
     {
         String sasl_mechanism = kafka_settings[KafkaSetting::kafka_sasl_mechanism].value;
         
-        // Check if this is AWS MSK IAM authentication
-        if (sasl_mechanism == "AWS_MSK_IAM")
+        // Check if this is AWS MSK IAM authentication (case-insensitive to match librdkafka behavior)
+        if (boost::iequals(sasl_mechanism, "AWS_MSK_IAM"))
         {
             // User specified rdkafka.sasl.mechanism=AWS_MSK_IAM
             // Convert to OAUTHBEARER and configure AWS MSK IAM token generation
