@@ -284,7 +284,7 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
         LOG_INFO(log, "Detected MSK Serverless cluster");
     }
     
-    // Set OAUTHBEARER (converted from user's rdkafka.sasl.mechanism=aws_msk_iam)
+    // Set OAUTHBEARER (converted from user's rdkafka.sasl.mechanism=AWS_MSK_IAM)
     config.set("sasl.mechanism", "OAUTHBEARER");
     config.set("security.protocol", "SASL_SSL");
     
@@ -305,7 +305,7 @@ void AWSMSKIAMAuth::configureOAuthCallbacks(
     auto * context_ptr = new std::shared_ptr<OAuthBearerTokenRefreshContext>(context);
     rd_kafka_conf_set_opaque(rd_config, context_ptr);
     
-    LOG_INFO(log, "Configured AWS MSK {} cluster IAM OAuth, region {}", 
+    LOG_INFO(log, "Configured AWS MSK {} cluster IAM OAuth, region {}",
              is_serverless ? "Serverless" : "Standard", effective_region);
 }
 
